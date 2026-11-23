@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowDownRight, ArrowRight, ArrowUpRight, Bell, CalendarDays, Check, CheckCircle2, Download,
   ChevronDown, Circle, Clock3, Compass, ExternalLink, FileCheck2, Flag, FolderKanban,
-  LayoutDashboard, Menu, MoreHorizontal, Plus, RefreshCw, Sparkles, Target, X,
+  LayoutDashboard, Menu, MoreHorizontal, Plus, RefreshCw, Sparkles, Sun, Target, X,
 } from 'lucide-react'
 import {
   changeTaskStatus, completedCount, demoState, loadState, localDateKey, saveState,
@@ -14,6 +14,7 @@ import { buildDailyProgressFeedback, buildReviewProgressContext } from './feedba
 import { buildMetricReviewContext, isValidMetric, metricProgress, metricTrendCoordinates } from './metrics'
 import { buildAllGoalCalendarItems, buildGoalAgenda, buildTodayGoalActions } from './goalCalendar'
 import { buildWeeklyCapacitySummary } from './weeklyCapacity'
+import { buildProgressSlices, type ProgressSliceItem } from './progressSlices'
 
 type Page = 'today' | 'calendar' | 'direction' | 'project' | 'reviews'
 type ReviewMode = 'day' | 'week' | 'fortnight' | 'month'
@@ -239,6 +240,57 @@ function App() {
   )
 }
 
+function ProgressSlicesCard({ goal, tasks }: { goal: GoalPlan; tasks: ActionTask[]; onOpenProject: () => void; onGoalEdit: () => void }) {
+  const summary = useMemo(() => buildProgressSlices(goal, tasks), [goal, tasks])
+
+  function getSliceIcon(id: ProgressSliceItem['id']) {
+    switch (id) {
+      case 'daily':
+        return <Sun size={15} />
+      case 'weekly':
+        return <CalendarDays size={15} />
+      case 'monthly':
+        return <FolderKanban size={15} />
+      case 'yearly':
+        return <Flag size={15} />
+    }
+  }
+
+  return <section className="progress-slices-section" aria-label="阶段进展切片总览">
+    <div className="progress-slices-heading">
+      <div>
+        <span className="section-kicker">PROGRESS SLICES · D / W / M / Y</span>
+        <h2>日·周·月·年进度切片</h2>
+      </div>
+      <span className="slices-caption">以真实证据统计 · 无数据不臆测</span>
+    </div>
+    <div className="progress-slices-grid">
+      {summary.items.map((item) => <div className={`slice-card slice-${item.id}`} key={item.id} aria-label={`${item.title}进度：${item.hasData ? item.progressLabel : item.statusBadge}`}>
+        <div className="slice-card-top">
+          <div className="slice-title-group">
+            <span className={`slice-icon icon-${item.id}`}>{getSliceIcon(item.id)}</span>
+            <div>
+              <strong className="slice-name">{item.title}</strong>
+              <small className="slice-period">{item.periodLabel}</small>
+            </div>
+          </div>
+          <span className={`slice-badge ${item.hasData ? 'badge-active' : 'badge-empty'}`}>{item.statusBadge}</span>
+        </div>
+        <div className="slice-value-row">
+          <span className={`slice-value ${!item.hasData ? 'value-empty' : ''}`}>{item.progressLabel}</span>
+          {item.hasData && item.totalCount !== undefined && item.confirmedCount !== undefined && (
+            <span className="slice-ratio-label">{item.confirmedCount} / {item.totalCount} 项</span>
+          )}
+        </div>
+        <div className="progress-track slice-progress-track" role="progressbar" aria-label={`${item.title}完成度`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={item.progress ?? 0}>
+          <span style={{ width: `${item.progress ?? 0}%` }} className={!item.hasData ? 'slice-bar-empty' : ''} />
+        </div>
+        <p className="slice-detail">{item.detail}</p>
+      </div>)}
+    </div>
+  </section>
+}
+
 function TodayPage({ state, progress, done, metrics, onTaskStatus, onStartTask, onAddTask, onEditTask, onEditMetric, onReview, onWeekReview, onGoalEdit, onIntegrations, onOpenProject, goalSpaces, activeGoalSpaceId, onOpenGoal, onGoalTaskStatus, onGoalTaskConfirm, weeklyFocusBudgetMinutes, onWeeklyBudgetChange }: {
   state: MonitorState; progress: number; done: number; metrics: OutcomeMetric[]; onTaskStatus: (id: string, status: ActionTask['status']) => void; onStartTask: (id: string) => void; onAddTask: () => void; onEditTask: (task: ActionTask) => void; onEditMetric: (metric: OutcomeMetric) => void; onReview: () => void; onWeekReview: () => void; onGoalEdit: () => void; onIntegrations: () => void; onOpenProject: () => void; goalSpaces: GoalWorkspace[]; activeGoalSpaceId: string; onOpenGoal: (goalSpaceId: string) => void; onGoalTaskStatus: (goalSpaceId: string, taskId: string, status: ActionTask['status']) => void; onGoalTaskConfirm: (goalSpaceId: string, taskId: string) => void; weeklyFocusBudgetMinutes: number; onWeeklyBudgetChange: (minutes: number) => void
 }) {
@@ -247,6 +299,8 @@ function TodayPage({ state, progress, done, metrics, onTaskStatus, onStartTask, 
     <section className="welcome-row"><div><div className="eyebrow"><span className="eyebrow-line" />{new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date()).toUpperCase()} <span className="eyebrow-dot">·</span> 一次只推进一件重要的事</div><h1>早上好，<em>向前一步。</em></h1><p className="welcome-copy">把注意力放回今天能做的事。计划是起点，留下的成果才是进展。</p></div><button className="button button-quiet" onClick={onGoalEdit}><Target size={15} />编辑方向</button></section>
 
     <section className="direction-strip"><div className="direction-icon"><Compass size={18} /></div><div className="direction-main"><span className="section-kicker">当前人生方向</span><strong>{state.goal.direction}</strong></div><div className="direction-divider" /><div className="direction-goal"><span className="section-kicker">年度里程碑</span><strong>{state.goal.annualMilestone}</strong></div><button className="strip-arrow" aria-label="查看目标地图"><ArrowRight size={17} /></button></section>
+
+    <ProgressSlicesCard goal={state.goal} tasks={state.tasks} onOpenProject={onOpenProject} onGoalEdit={onGoalEdit} />
 
     {goalSpaces.length > 1 && <TodayAcrossGoals goalSpaces={goalSpaces} activeGoalSpaceId={activeGoalSpaceId} onOpenGoal={onOpenGoal} onStatus={onGoalTaskStatus} onConfirm={onGoalTaskConfirm} />}
     <WeeklyCapacityCard goalSpaces={goalSpaces} budgetMinutes={weeklyFocusBudgetMinutes} onBudgetChange={onWeeklyBudgetChange} />

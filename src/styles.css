@@ -27,3 +27,33 @@
 @media(max-width:560px){.today-across-item{grid-template-columns:40px minmax(0,1fr);gap:7px;padding:7px}.today-across-item time{align-self:start;padding-top:3px}.today-across-item .agenda-item-actions{grid-column:2;flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px}.today-across-heading h2{font-size:12px}}
 .weekly-capacity-card{margin:0 0 22px;padding:13px 15px;border:1px solid #e4ebe5;border-radius:8px;background:#fff}.weekly-capacity-heading{display:flex;justify-content:space-between;align-items:center;gap:10px}.weekly-capacity-heading h2{margin:4px 0 0;font-size:13px;font-weight:600;color:#46564c}.weekly-capacity-heading>span{font-size:8px;color:#87958b}.weekly-capacity-body{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:11px}.weekly-capacity-total{display:grid;gap:3px}.weekly-capacity-total strong{font-size:18px;color:#345d4d}.weekly-capacity-total span,.weekly-capacity-total b{font-size:8px;color:#8a978e;font-weight:500}.weekly-capacity-total .capacity-over{color:#a65e4f}.weekly-capacity-input{display:grid;gap:5px;min-width:120px}.weekly-capacity-input span{font-size:8px;color:#849188}.weekly-capacity-input input{width:130px;height:32px;border:1px solid #e3e9e4;border-radius:5px;padding:0 8px;color:#506056;font-size:10px}.weekly-capacity-progress{height:5px;margin-top:10px;border-radius:5px;background:#edf1ed;overflow:hidden}.weekly-capacity-progress span{display:block;height:100%;border-radius:inherit;background:#69a083}.weekly-capacity-progress span.capacity-bar-over{background:#c57a64}.weekly-capacity-card>p{margin:8px 0 0;font-size:8px;line-height:1.5;color:#929e95}
 @media(max-width:560px){.weekly-capacity-card{padding:11px}.weekly-capacity-body{align-items:flex-end}.weekly-capacity-total strong{font-size:15px}.weekly-capacity-input{min-width:105px}.weekly-capacity-input input{width:110px}}
+
+.progress-slices-section{margin:0 0 22px;padding:15px 17px;border:1px solid #e4ebe5;border-radius:8px;background:#fff;box-shadow:0 2px 8px rgba(33,54,45,.02)}
+.progress-slices-heading{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin-bottom:12px}
+.progress-slices-heading h2{margin:3px 0 0;font-size:14px;font-weight:600;color:#35443d}
+.slices-caption{font-size:8px;color:#929e96}
+.progress-slices-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px}
+.slice-card{border:1px solid #eaf0eb;border-radius:7px;background:#fbfdfb;padding:12px;display:flex;flex-direction:column;gap:7px;transition:border-color .15s,box-shadow .15s}
+.slice-card:hover{border-color:#cfddd4;box-shadow:0 4px 12px rgba(40,65,52,.035)}
+.slice-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:6px}
+.slice-title-group{display:flex;align-items:center;gap:7px;min-width:0}
+.slice-icon{width:26px;height:26px;border-radius:6px;display:grid;place-items:center;flex:none}
+.icon-daily{background:#fdf6e7;color:#b2822b}
+.icon-weekly{background:#edf5f0;color:#447a66}
+.icon-monthly{background:#eef3f7;color:#55788f}
+.icon-yearly{background:#f5edf7;color:#825996}
+.slice-name{display:block;font-size:10.5px;font-weight:600;color:#37473f;line-height:1.2}
+.slice-period{display:block;font-size:7.5px;color:#939f97;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.slice-badge{font-size:7.5px;font-weight:600;padding:2px 5px;border-radius:4px;white-space:nowrap;flex:none}
+.badge-active{background:#e7f3ec;color:#3c7a61}
+.badge-empty{background:#f1f4f1;color:#8a968f}
+.slice-value-row{display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin:2px 0 0}
+.slice-value{font-family:Manrope,sans-serif;font-size:20px;font-weight:700;color:#2c3f36;line-height:1}
+.slice-value.value-empty{color:#a2aca6;font-size:18px}
+.slice-ratio-label{font-size:8px;color:#88958d}
+.slice-progress-track{height:4px;border-radius:3px;background:#edf1ed;overflow:hidden;margin:1px 0}
+.slice-progress-track span{display:block;height:100%;border-radius:inherit;background:#56947e;transition:width .25s}
+.slice-progress-track span.slice-bar-empty{background:transparent}
+.slice-detail{margin:0;font-size:8px;line-height:1.5;color:#829087;overflow-wrap:anywhere}
+@media(max-width:960px){.progress-slices-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}}
+@media(max-width:560px){.progress-slices-section{padding:12px}.progress-slices-heading h2{font-size:13px}.progress-slices-grid{grid-template-columns:1fr;gap:8px}.slice-card{padding:10px}}

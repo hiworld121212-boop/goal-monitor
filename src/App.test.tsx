@@ -331,4 +331,46 @@ describe('Goal Monitor first-run flows', () => {
     expect(sidebar).not.toHaveClass('sidebar-open')
     expect(screen.getByRole('dialog', { name: '连接与数据来源' })).toBeInTheDocument()
   })
+
+  it('displays simple, clear icon-based progress summaries for daily, weekly, monthly, and yearly slices on the homepage', () => {
+    render(<App />)
+    const section = screen.getByRole('region', { name: '阶段进展切片总览' })
+    expect(section).toBeInTheDocument()
+    expect(within(section).getByText('日·周·月·年进度切片')).toBeInTheDocument()
+
+    // Daily & weekly default to no-data without invented percentages
+    expect(within(section).getByText('今日无排期')).toBeInTheDocument()
+    expect(within(section).getByText('本周无排期')).toBeInTheDocument()
+
+    // Monthly reflects 30-day project actions with honest evidence
+    expect(within(section).getByText('0 / 3 项产出已确认')).toBeInTheDocument()
+    expect(within(section).getByText('0%')).toBeInTheDocument()
+
+    // Yearly reflects annual milestone with no-data state when metrics are absent
+    expect(within(section).getByText('待设定量化指标')).toBeInTheDocument()
+    expect(within(section).getByText(/通过晋升或新岗位/)).toBeInTheDocument()
+  })
+
+  it('updates daily and weekly slices when tasks are scheduled and evidence is confirmed', () => {
+    const now = new Date()
+    const scheduledAt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 14, 0).toISOString()
+    const scheduledTask = { ...demoState.tasks[0], scheduledAt, status: 'confirmed' as const, evidenceNote: '已跑通测试' }
+    localStorage.setItem(storageKey, JSON.stringify(syncActiveGoalWorkspace({
+      ...demoState,
+      tasks: [scheduledTask, demoState.tasks[1]],
+      goalSpaces: [{ ...demoState.goalSpaces[0], tasks: [scheduledTask, demoState.tasks[1]] }],
+    })))
+    render(<App />)
+    const section = screen.getByRole('region', { name: '阶段进展切片总览' })
+    const dailyCard = section.querySelector('.slice-daily') as HTMLElement
+    const weeklyCard = section.querySelector('.slice-weekly') as HTMLElement
+    const monthlyCard = section.querySelector('.slice-monthly') as HTMLElement
+
+    expect(within(dailyCard).getByText('1 / 1 今日已确认')).toBeInTheDocument()
+    expect(within(dailyCard).getByText('100%')).toBeInTheDocument()
+    expect(within(weeklyCard).getByText('1 / 1 本周已确认')).toBeInTheDocument()
+    expect(within(weeklyCard).getByText('100%')).toBeInTheDocument()
+    expect(within(monthlyCard).getByText('1 / 2 项产出已确认')).toBeInTheDocument()
+    expect(within(monthlyCard).getByText('50%')).toBeInTheDocument()
+  })
 })
