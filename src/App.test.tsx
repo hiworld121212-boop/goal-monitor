@@ -332,23 +332,63 @@ describe('Goal Monitor first-run flows', () => {
     expect(screen.getByRole('dialog', { name: '连接与数据来源' })).toBeInTheDocument()
   })
 
-  it('displays simple, clear icon-based progress summaries for daily, weekly, monthly, and yearly slices on the homepage', () => {
+  it('displays scannable icon-based progress slices with one clear status/metric and one concise guidance line', () => {
     render(<App />)
     const section = screen.getByRole('region', { name: '阶段进展切片总览' })
     expect(section).toBeInTheDocument()
     expect(within(section).getByText('日·周·月·年进度切片')).toBeInTheDocument()
 
-    // Daily & weekly default to no-data without invented percentages
-    expect(within(section).getByText('今日无排期')).toBeInTheDocument()
-    expect(within(section).getByText('本周无排期')).toBeInTheDocument()
+    const cards = section.querySelectorAll('.slice-card')
+    expect(cards).toHaveLength(4)
+    cards.forEach((card) => {
+      expect(card.querySelectorAll('.slice-icon')).toHaveLength(1)
+      expect(card.querySelectorAll('.slice-guidance')).toHaveLength(1)
+      expect(card.querySelectorAll('[role="progressbar"]')).toHaveLength(1)
+    })
+
+    // Daily & weekly default to unmistakable empty status with next-step guidance
+    const dailyCard = section.querySelector('.slice-daily') as HTMLElement
+    const weeklyCard = section.querySelector('.slice-weekly') as HTMLElement
+    const monthlyCard = section.querySelector('.slice-monthly') as HTMLElement
+    const yearlyCard = section.querySelector('.slice-yearly') as HTMLElement
+
+    expect(dailyCard).toHaveClass('is-empty')
+    expect(within(dailyCard).getByText('今日无排期')).toBeInTheDocument()
+    expect(within(dailyCard).getByText('从待办选 1 项排入今天')).toBeInTheDocument()
+
+    expect(weeklyCard).toHaveClass('is-empty')
+    expect(within(weeklyCard).getByText('本周无排期')).toBeInTheDocument()
+    expect(within(weeklyCard).getByText('安排本周专注块并确认产出')).toBeInTheDocument()
 
     // Monthly reflects 30-day project actions with honest evidence
-    expect(within(section).getByText('0 / 3 项产出已确认')).toBeInTheDocument()
-    expect(within(section).getByText('0%')).toBeInTheDocument()
+    expect(monthlyCard).toHaveClass('is-active')
+    expect(within(monthlyCard).getByText('0%')).toBeInTheDocument()
+    expect(within(monthlyCard).getByText('0 / 3 已确认')).toBeInTheDocument()
+    expect(within(monthlyCard).getByText('推进并确认第 1 项项目产出')).toBeInTheDocument()
 
-    // Yearly reflects annual milestone with no-data state when metrics are absent
-    expect(within(section).getByText('待设定量化指标')).toBeInTheDocument()
-    expect(within(section).getByText(/通过晋升或新岗位/)).toBeInTheDocument()
+    // Yearly reflects no-data state when outcome metrics are absent
+    expect(yearlyCard).toHaveClass('is-empty')
+    expect(within(yearlyCard).getByText('待设量化指标')).toBeInTheDocument()
+    expect(within(yearlyCard).getByText('设定 1 项可量化结果指标')).toBeInTheDocument()
+  })
+
+  it('triggers actionable next steps directly from slice guidance buttons', () => {
+    render(<App />)
+    const section = screen.getByRole('region', { name: '阶段进展切片总览' })
+
+    // Daily empty guidance opens task scheduler for the first unscheduled task
+    fireEvent.click(within(section).getByRole('button', { name: '从待办选 1 项排入今天' }))
+    expect(screen.getByRole('dialog', { name: '安排行动' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '取消' }))
+
+    // Yearly empty guidance opens GoalEditor to set outcome metrics
+    fireEvent.click(within(section).getByRole('button', { name: '设定 1 项可量化结果指标' }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '取消' }))
+
+    // Monthly guidance opens ProjectPage
+    fireEvent.click(within(section).getByRole('button', { name: '推进并确认第 1 项项目产出' }))
+    expect(screen.getByRole('heading', { name: /做一个展示目标岗位核心技能/ })).toBeInTheDocument()
   })
 
   it('updates daily and weekly slices when tasks are scheduled and evidence is confirmed', () => {
@@ -366,11 +406,35 @@ describe('Goal Monitor first-run flows', () => {
     const weeklyCard = section.querySelector('.slice-weekly') as HTMLElement
     const monthlyCard = section.querySelector('.slice-monthly') as HTMLElement
 
-    expect(within(dailyCard).getByText('1 / 1 今日已确认')).toBeInTheDocument()
+    expect(dailyCard).toHaveClass('is-complete')
     expect(within(dailyCard).getByText('100%')).toBeInTheDocument()
-    expect(within(weeklyCard).getByText('1 / 1 本周已确认')).toBeInTheDocument()
+    expect(within(dailyCard).getByText('1 / 1 已确认')).toBeInTheDocument()
+    expect(within(dailyCard).getByText('今日已全部确认，可做日终回顾')).toBeInTheDocument()
+
+    expect(weeklyCard).toHaveClass('is-complete')
     expect(within(weeklyCard).getByText('100%')).toBeInTheDocument()
-    expect(within(monthlyCard).getByText('1 / 2 项产出已确认')).toBeInTheDocument()
+    expect(within(weeklyCard).getByText('1 / 1 已确认')).toBeInTheDocument()
+    expect(within(weeklyCard).getByText('本周排期已全确认，可做周复盘')).toBeInTheDocument()
+
+    expect(monthlyCard).toHaveClass('is-active')
     expect(within(monthlyCard).getByText('50%')).toBeInTheDocument()
+    expect(within(monthlyCard).getByText('1 / 2 已确认')).toBeInTheDocument()
+    expect(within(monthlyCard).getByText('继续推进剩余 1 项行动')).toBeInTheDocument()
+  })
+
+  it('keeps slice layout clean and structurally valid for narrow 320px viewports', () => {
+    Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 320 })
+    window.dispatchEvent(new Event('resize'))
+    render(<App />)
+    const section = screen.getByRole('region', { name: '阶段进展切片总览' })
+    const grid = section.querySelector('.progress-slices-grid') as HTMLElement
+    expect(grid).toBeInTheDocument()
+    expect(grid.children).toHaveLength(4)
+    Array.from(grid.children).forEach((card) => {
+      expect(card.querySelector('.slice-card-top')).toBeInTheDocument()
+      expect(card.querySelector('.slice-metric-row')).toBeInTheDocument()
+      expect(card.querySelector('.slice-progress-track')).toBeInTheDocument()
+      expect(card.querySelector('.slice-guidance')).toBeInTheDocument()
+    })
   })
 })

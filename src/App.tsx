@@ -240,53 +240,111 @@ function App() {
   )
 }
 
-function ProgressSlicesCard({ goal, tasks }: { goal: GoalPlan; tasks: ActionTask[]; onOpenProject: () => void; onGoalEdit: () => void }) {
+function ProgressSlicesCard({
+  goal, tasks, onOpenProject, onGoalEdit, onAddTask, onEditTask, onReview, onWeekReview,
+}: {
+  goal: GoalPlan
+  tasks: ActionTask[]
+  onOpenProject: () => void
+  onGoalEdit: () => void
+  onAddTask: () => void
+  onEditTask: (task: ActionTask) => void
+  onReview: () => void
+  onWeekReview: () => void
+}) {
   const summary = useMemo(() => buildProgressSlices(goal, tasks), [goal, tasks])
 
   function getSliceIcon(id: ProgressSliceItem['id']) {
     switch (id) {
       case 'daily':
-        return <Sun size={15} />
+        return <Sun size={16} strokeWidth={2} />
       case 'weekly':
-        return <CalendarDays size={15} />
+        return <CalendarDays size={16} strokeWidth={2} />
       case 'monthly':
-        return <FolderKanban size={15} />
+        return <FolderKanban size={16} strokeWidth={2} />
       case 'yearly':
-        return <Flag size={15} />
+        return <Flag size={16} strokeWidth={2} />
+    }
+  }
+
+  function handleSliceAction(item: ProgressSliceItem) {
+    if (item.actionKind === 'schedule-today' || item.actionKind === 'schedule-week') {
+      const nextUnscheduled = tasks.find(
+        (task) => !task.scheduledAt && (task.status === 'planned' || task.status === 'in-progress' || task.status === 'rescheduled'),
+      )
+      if (nextUnscheduled) onEditTask(nextUnscheduled)
+      else onAddTask()
+      return
+    }
+    if (item.actionKind === 'review') {
+      if (item.id === 'daily') onReview()
+      else onWeekReview()
+      return
+    }
+    if (item.actionKind === 'metric' || item.actionKind === 'goal') {
+      onGoalEdit()
+      return
+    }
+    if (item.actionKind === 'project') {
+      onOpenProject()
     }
   }
 
   return <section className="progress-slices-section" aria-label="阶段进展切片总览">
     <div className="progress-slices-heading">
-      <div>
-        <span className="section-kicker">PROGRESS SLICES · D / W / M / Y</span>
-        <h2>日·周·月·年进度切片</h2>
-      </div>
-      <span className="slices-caption">以真实证据统计 · 无数据不臆测</span>
+      <h2>日·周·月·年进度切片</h2>
+      <span className="slices-caption">仅计已确认产出 · 空缺不臆测</span>
     </div>
     <div className="progress-slices-grid">
-      {summary.items.map((item) => <div className={`slice-card slice-${item.id}`} key={item.id} aria-label={`${item.title}进度：${item.hasData ? item.progressLabel : item.statusBadge}`}>
-        <div className="slice-card-top">
-          <div className="slice-title-group">
-            <span className={`slice-icon icon-${item.id}`}>{getSliceIcon(item.id)}</span>
-            <div>
+      {summary.items.map((item) => {
+        const isComplete = item.hasData && item.progress === 100
+        const stateClass = !item.hasData ? 'is-empty' : isComplete ? 'is-complete' : 'is-active'
+        return <div
+          className={`slice-card slice-${item.id} ${stateClass}`}
+          key={item.id}
+          aria-label={`${item.title}进度：${item.hasData ? `${item.progressLabel}，${item.metricSummary}` : item.statusBadge}`}
+        >
+          <div className="slice-card-top">
+            <div className="slice-title-group">
+              <span className={`slice-icon icon-${item.id}`} aria-hidden="true">{getSliceIcon(item.id)}</span>
               <strong className="slice-name">{item.title}</strong>
-              <small className="slice-period">{item.periodLabel}</small>
             </div>
+            <span className="slice-period">{item.periodLabel}</span>
           </div>
-          <span className={`slice-badge ${item.hasData ? 'badge-active' : 'badge-empty'}`}>{item.statusBadge}</span>
-        </div>
-        <div className="slice-value-row">
-          <span className={`slice-value ${!item.hasData ? 'value-empty' : ''}`}>{item.progressLabel}</span>
-          {item.hasData && item.totalCount !== undefined && item.confirmedCount !== undefined && (
-            <span className="slice-ratio-label">{item.confirmedCount} / {item.totalCount} 项</span>
+
+          <div className="slice-metric-row">
+            {item.hasData ? (
+              <>
+                <span className={`slice-value ${isComplete ? 'value-complete' : ''}`}>{item.progressLabel}</span>
+                <span className="slice-metric-meta">{item.metricSummary}</span>
+              </>
+            ) : (
+              <span className="slice-empty-status">{item.statusBadge}</span>
+            )}
+          </div>
+
+          <div
+            className={`progress-track slice-progress-track ${!item.hasData ? 'is-empty' : ''}`}
+            role="progressbar"
+            aria-label={`${item.title}完成度`}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={item.progress ?? 0}
+            aria-valuetext={item.hasData ? item.progressLabel : item.statusBadge}
+          >
+            <span style={{ width: `${item.progress ?? 0}%` }} className={!item.hasData ? 'slice-bar-empty' : isComplete ? 'slice-bar-complete' : ''} />
+          </div>
+
+          {item.actionKind !== 'none' ? (
+            <button type="button" className="slice-guidance slice-guidance-action" onClick={() => handleSliceAction(item)}>
+              <span>{item.detail}</span>
+              <ArrowRight size={13} aria-hidden="true" />
+            </button>
+          ) : (
+            <p className="slice-guidance">{item.detail}</p>
           )}
         </div>
-        <div className="progress-track slice-progress-track" role="progressbar" aria-label={`${item.title}完成度`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={item.progress ?? 0}>
-          <span style={{ width: `${item.progress ?? 0}%` }} className={!item.hasData ? 'slice-bar-empty' : ''} />
-        </div>
-        <p className="slice-detail">{item.detail}</p>
-      </div>)}
+      })}
     </div>
   </section>
 }
@@ -300,7 +358,16 @@ function TodayPage({ state, progress, done, metrics, onTaskStatus, onStartTask, 
 
     <section className="direction-strip"><div className="direction-icon"><Compass size={18} /></div><div className="direction-main"><span className="section-kicker">当前人生方向</span><strong>{state.goal.direction}</strong></div><div className="direction-divider" /><div className="direction-goal"><span className="section-kicker">年度里程碑</span><strong>{state.goal.annualMilestone}</strong></div><button className="strip-arrow" aria-label="查看目标地图"><ArrowRight size={17} /></button></section>
 
-    <ProgressSlicesCard goal={state.goal} tasks={state.tasks} onOpenProject={onOpenProject} onGoalEdit={onGoalEdit} />
+    <ProgressSlicesCard
+      goal={state.goal}
+      tasks={state.tasks}
+      onOpenProject={onOpenProject}
+      onGoalEdit={onGoalEdit}
+      onAddTask={onAddTask}
+      onEditTask={onEditTask}
+      onReview={onReview}
+      onWeekReview={onWeekReview}
+    />
 
     {goalSpaces.length > 1 && <TodayAcrossGoals goalSpaces={goalSpaces} activeGoalSpaceId={activeGoalSpaceId} onOpenGoal={onOpenGoal} onStatus={onGoalTaskStatus} onConfirm={onGoalTaskConfirm} />}
     <WeeklyCapacityCard goalSpaces={goalSpaces} budgetMinutes={weeklyFocusBudgetMinutes} onBudgetChange={onWeeklyBudgetChange} />

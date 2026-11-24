@@ -1,6 +1,8 @@
 import { localDateKey, type ActionTask, type GoalPlan, type OutcomeMetric } from './model'
 import { metricProgress } from './metrics'
 
+export type ProgressSliceActionKind = 'schedule-today' | 'schedule-week' | 'project' | 'metric' | 'goal' | 'review' | 'none'
+
 export interface ProgressSliceItem {
   id: 'daily' | 'weekly' | 'monthly' | 'yearly'
   title: string
@@ -9,8 +11,10 @@ export interface ProgressSliceItem {
   progress: number | null
   progressLabel: string
   statusBadge: string
+  metricSummary: string
   hasData: boolean
   detail: string
+  actionKind: ProgressSliceActionKind
   startDate?: string
   endDate?: string
   totalCount?: number
@@ -35,7 +39,7 @@ export function buildDailySlice(tasks: ActionTask[], now = new Date()): Progress
   const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const month = todayDate.getMonth() + 1
   const day = todayDate.getDate()
-  const periodLabel = `今日 · ${month}月${day}日`
+  const periodLabel = `${month}月${day}日`
 
   const scheduledToday = tasks.filter((task) => {
     if (!task.scheduledAt || task.status === 'skipped') return false
@@ -45,6 +49,9 @@ export function buildDailySlice(tasks: ActionTask[], now = new Date()): Progress
   })
 
   if (scheduledToday.length === 0) {
+    const hasUnscheduledActive = tasks.some(
+      (task) => !task.scheduledAt && (task.status === 'planned' || task.status === 'in-progress' || task.status === 'rescheduled'),
+    )
     return {
       id: 'daily',
       title: '今日',
@@ -53,8 +60,10 @@ export function buildDailySlice(tasks: ActionTask[], now = new Date()): Progress
       progress: null,
       progressLabel: '—',
       statusBadge: '今日无排期',
+      metricSummary: '0 项排期',
       hasData: false,
-      detail: '今日暂无已排期行动；不预设完成比例。',
+      detail: hasUnscheduledActive ? '从待办选 1 项排入今天' : '排入 1 项今日行动',
+      actionKind: 'schedule-today',
       startDate: todayKey,
       endDate: todayKey,
       totalCount: 0,
@@ -63,8 +72,23 @@ export function buildDailySlice(tasks: ActionTask[], now = new Date()): Progress
   }
 
   const confirmedCount = scheduledToday.filter((task) => task.status === 'confirmed').length
+  const pendingCount = scheduledToday.filter((task) => task.status === 'pending' || task.status === 'unobserved').length
+  const openCount = scheduledToday.filter((task) => task.status === 'planned' || task.status === 'in-progress' || task.status === 'rescheduled').length
   const totalCount = scheduledToday.length
   const progress = Math.round((confirmedCount / totalCount) * 100)
+
+  let detail: string
+  let actionKind: ProgressSliceActionKind = 'project'
+  if (confirmedCount === totalCount) {
+    detail = '今日已全部确认，可做日终回顾'
+    actionKind = 'review'
+  } else if (openCount === 0 && pendingCount > 0) {
+    detail = `核实 ${pendingCount} 项待确认证据`
+  } else if (pendingCount > 0) {
+    detail = `推进剩余项并核实 ${pendingCount} 项证据`
+  } else {
+    detail = `完成并确认剩余 ${openCount} 项今日排期`
+  }
 
   return {
     id: 'daily',
@@ -74,10 +98,10 @@ export function buildDailySlice(tasks: ActionTask[], now = new Date()): Progress
     progress,
     progressLabel: `${progress}%`,
     statusBadge: `${confirmedCount} / ${totalCount} 今日已确认`,
+    metricSummary: `${confirmedCount} / ${totalCount} 已确认`,
     hasData: true,
-    detail: confirmedCount === totalCount
-      ? '今日安排的行动全部已确认完成。'
-      : `已确认 ${confirmedCount} 项产出，还有 ${totalCount - confirmedCount} 项待推进或待核实。`,
+    detail,
+    actionKind,
     startDate: todayKey,
     endDate: todayKey,
     totalCount,
@@ -98,7 +122,7 @@ export function buildWeeklySlice(tasks: ActionTask[], now = new Date()): Progres
 
   const startDate = localDateKey(start)
   const endDate = localDateKey(end)
-  const periodLabel = `本周 · ${start.getMonth() + 1}月${start.getDate()}日 ~ ${end.getMonth() + 1}月${end.getDate()}日`
+  const periodLabel = `${start.getMonth() + 1}/${start.getDate()}–${end.getMonth() + 1}/${end.getDate()}`
 
   const scheduledInWeek = tasks.filter((task) => {
     if (!task.scheduledAt || task.status === 'skipped') return false
@@ -117,8 +141,10 @@ export function buildWeeklySlice(tasks: ActionTask[], now = new Date()): Progres
       progress: null,
       progressLabel: '—',
       statusBadge: '本周无排期',
+      metricSummary: '0 项排期',
       hasData: false,
-      detail: '本周暂无已排期行动；排期代表投入，证据代表产出。',
+      detail: '安排本周专注块并确认产出',
+      actionKind: 'schedule-week',
       startDate,
       endDate,
       totalCount: 0,
@@ -127,8 +153,21 @@ export function buildWeeklySlice(tasks: ActionTask[], now = new Date()): Progres
   }
 
   const confirmedCount = scheduledInWeek.filter((task) => task.status === 'confirmed').length
+  const pendingCount = scheduledInWeek.filter((task) => task.status === 'pending' || task.status === 'unobserved').length
+  const openCount = scheduledInWeek.filter((task) => task.status === 'planned' || task.status === 'in-progress' || task.status === 'rescheduled').length
   const totalCount = scheduledInWeek.length
   const progress = Math.round((confirmedCount / totalCount) * 100)
+
+  let detail: string
+  let actionKind: ProgressSliceActionKind = 'project'
+  if (confirmedCount === totalCount) {
+    detail = '本周排期已全确认，可做周复盘'
+    actionKind = 'review'
+  } else if (openCount === 0 && pendingCount > 0) {
+    detail = `核实本周 ${pendingCount} 项待确认证据`
+  } else {
+    detail = `本周还有 ${totalCount - confirmedCount} 项排期待确认`
+  }
 
   return {
     id: 'weekly',
@@ -138,8 +177,10 @@ export function buildWeeklySlice(tasks: ActionTask[], now = new Date()): Progres
     progress,
     progressLabel: `${progress}%`,
     statusBadge: `${confirmedCount} / ${totalCount} 本周已确认`,
+    metricSummary: `${confirmedCount} / ${totalCount} 已确认`,
     hasData: true,
-    detail: `本周已安排 ${totalCount} 项专注块，已确认 ${confirmedCount} 项实际产出。`,
+    detail,
+    actionKind,
     startDate,
     endDate,
     totalCount,
@@ -158,11 +199,12 @@ export function buildMonthlySlice(goal: GoalPlan, tasks: ActionTask[], now = new
   start.setDate(start.getDate() - 29)
   const startDate = localDateKey(start)
   const endDate = localDateKey(end)
-  const periodLabel = '30 天项目 · 本月'
+  const periodLabel = '本月'
 
   const activeTasks = tasks.filter((task) => task.status !== 'skipped')
 
   if (activeTasks.length === 0) {
+    const hasProject = Boolean(goal.project.trim())
     return {
       id: 'monthly',
       title: '30天项目',
@@ -171,8 +213,10 @@ export function buildMonthlySlice(goal: GoalPlan, tasks: ActionTask[], now = new
       progress: null,
       progressLabel: '—',
       statusBadge: '暂无项目行动',
+      metricSummary: '0 项行动',
       hasData: false,
-      detail: goal.project ? `当前项目「${goal.project}」尚未添加具体行动。` : '尚未设定当前 30 天项目。',
+      detail: hasProject ? '为项目添加第 1 项行动' : '先设定 30 天项目与第 1 项行动',
+      actionKind: hasProject ? 'project' : 'goal',
       startDate,
       endDate,
       totalCount: 0,
@@ -182,20 +226,21 @@ export function buildMonthlySlice(goal: GoalPlan, tasks: ActionTask[], now = new
 
   const confirmedCount = activeTasks.filter((task) => task.status === 'confirmed').length
   const pendingCount = activeTasks.filter((task) => task.status === 'pending' || task.status === 'unobserved').length
+  const openCount = activeTasks.filter((task) => task.status === 'planned' || task.status === 'in-progress' || task.status === 'rescheduled').length
   const totalCount = activeTasks.length
   const progress = Math.round((confirmedCount / totalCount) * 100)
 
   let detail: string
   if (confirmedCount === totalCount) {
-    detail = `项目全部 ${totalCount} 项行动已获得明确产出证据。`
-  } else if (confirmedCount > 0) {
-    detail = pendingCount > 0
-      ? `已确认 ${confirmedCount} 项产出，另有 ${pendingCount} 项等待核实证据。`
-      : `已确认 ${confirmedCount} 项产出，还有 ${totalCount - confirmedCount} 项推进中。`
+    detail = `全部 ${totalCount} 项行动已获确认证据`
+  } else if (confirmedCount === 0 && openCount === 0 && pendingCount > 0) {
+    detail = `补充 ${pendingCount} 项待核实行动证据`
+  } else if (confirmedCount === 0) {
+    detail = '推进并确认第 1 项项目产出'
+  } else if (pendingCount > 0) {
+    detail = `核实 ${pendingCount} 项证据并推进剩余项`
   } else {
-    detail = pendingCount > 0
-      ? `尚无已确认产出证据；${pendingCount} 项处于待核实状态，不自动判定失败。`
-      : '尚未获得确认产出证据；时间流逝不代表项目自动完成。'
+    detail = `继续推进剩余 ${totalCount - confirmedCount} 项行动`
   }
 
   return {
@@ -206,8 +251,10 @@ export function buildMonthlySlice(goal: GoalPlan, tasks: ActionTask[], now = new
     progress,
     progressLabel: `${progress}%`,
     statusBadge: `${confirmedCount} / ${totalCount} 项产出已确认`,
+    metricSummary: `${confirmedCount} / ${totalCount} 已确认`,
     hasData: true,
     detail,
+    actionKind: 'project',
     startDate,
     endDate,
     totalCount,
@@ -222,7 +269,7 @@ export function buildMonthlySlice(goal: GoalPlan, tasks: ActionTask[], now = new
  */
 export function buildYearlySlice(goal: GoalPlan, now = new Date()): ProgressSliceItem {
   const year = now.getFullYear()
-  const periodLabel = `${year} 年度里程碑`
+  const periodLabel = `${year}年`
   const metrics = goal.outcomeMetrics || []
 
   const validMetrics = metrics
@@ -237,11 +284,13 @@ export function buildYearlySlice(goal: GoalPlan, now = new Date()): ProgressSlic
       iconName: 'yearly',
       progress: null,
       progressLabel: '—',
-      statusBadge: '待设定量化指标',
+      statusBadge: '待设量化指标',
+      metricSummary: '未设指标',
       hasData: false,
-      detail: goal.annualMilestone
-        ? `${goal.annualMilestone}（暂无量化数据，不预设比例）`
-        : '年度里程碑与量化指标待设定；未记录时不臆测完成度。',
+      detail: metrics.length > 0
+        ? '修改指标目标值，使其可量化'
+        : '设定 1 项可量化结果指标',
+      actionKind: 'metric',
       totalCount: metrics.length,
       confirmedCount: 0,
     }
@@ -255,9 +304,15 @@ export function buildYearlySlice(goal: GoalPlan, now = new Date()): ProgressSlic
     ? `${validMetrics[0].metric.name} ${validMetrics[0].progress}%`
     : `${validMetrics.length} 项指标平均 ${avgProgress}%`
 
-  const detail = validMetrics
-    .map((item) => `${item.metric.name}：当前 ${item.metric.current} / 目标 ${item.metric.target} ${item.metric.unit}`)
-    .join('；')
+  const metricSummary = validMetrics.length === 1
+    ? `${validMetrics[0].metric.name} ${validMetrics[0].metric.current}/${validMetrics[0].metric.target}`
+    : `${validMetrics.length} 项量化指标`
+
+  const detail = avgProgress >= 100
+    ? '已达量化目标，可复盘或更新目标'
+    : validMetrics.length === 1
+      ? `按真实结果更新「${validMetrics[0].metric.name}」`
+      : `按真实结果定期更新 ${validMetrics.length} 项指标`
 
   return {
     id: 'yearly',
@@ -267,8 +322,10 @@ export function buildYearlySlice(goal: GoalPlan, now = new Date()): ProgressSlic
     progress: avgProgress,
     progressLabel: `${avgProgress}%`,
     statusBadge,
+    metricSummary,
     hasData: true,
     detail,
+    actionKind: 'metric',
     totalCount: validMetrics.length,
     confirmedCount: validMetrics.filter((m) => m.progress >= 100).length,
   }

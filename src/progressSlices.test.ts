@@ -35,17 +35,27 @@ const makeGoal = (overrides: Partial<GoalPlan> = {}): GoalPlan => ({
 })
 
 describe('Daily progress slice', () => {
-  it('displays a no-data state when no actions are scheduled today', () => {
+  it('displays an honest no-data state and suggests scheduling an unscheduled action', () => {
     const slice = buildDailySlice([
       makeTask({ scheduledAt: '2026-11-24T10:00' }), // Tomorrow
-      makeTask({ scheduledAt: undefined }), // Unscheduled
+      makeTask({ scheduledAt: undefined, status: 'planned' }), // Unscheduled active
     ], now)
 
     expect(slice.hasData).toBe(false)
     expect(slice.progress).toBeNull()
     expect(slice.progressLabel).toBe('—')
     expect(slice.statusBadge).toBe('今日无排期')
-    expect(slice.detail).toContain('不预设完成比例')
+    expect(slice.detail).toBe('从待办选 1 项排入今天')
+    expect(slice.actionKind).toBe('schedule-today')
+  })
+
+  it('displays concise schedule guidance when there are no tasks at all', () => {
+    const slice = buildDailySlice([], now)
+
+    expect(slice.hasData).toBe(false)
+    expect(slice.statusBadge).toBe('今日无排期')
+    expect(slice.detail).toBe('排入 1 项今日行动')
+    expect(slice.actionKind).toBe('schedule-today')
   })
 
   it('counts only evidence-confirmed tasks in today local date window', () => {
@@ -62,11 +72,22 @@ describe('Daily progress slice', () => {
     expect(slice.confirmedCount).toBe(1)
     expect(slice.progress).toBe(25)
     expect(slice.progressLabel).toBe('25%')
-    expect(slice.statusBadge).toBe('1 / 4 今日已确认')
-    expect(slice.detail).toContain('还有 3 项待推进或待核实')
+    expect(slice.metricSummary).toBe('1 / 4 已确认')
+    expect(slice.detail).toBe('推进剩余项并核实 1 项证据')
   })
 
-  it('excludes skipped actions from scheduled daily total', () => {
+  it('guides user to verify pending evidence when no open tasks remain today', () => {
+    const slice = buildDailySlice([
+      makeTask({ id: '1', scheduledAt: '2026-11-23T09:00', status: 'pending' }),
+      makeTask({ id: '2', scheduledAt: '2026-11-23T14:30', status: 'unobserved' }),
+    ], now)
+
+    expect(slice.progress).toBe(0)
+    expect(slice.metricSummary).toBe('0 / 2 已确认')
+    expect(slice.detail).toBe('核实 2 项待确认证据')
+  })
+
+  it('excludes skipped actions and prompts daily review when all scheduled tasks are confirmed', () => {
     const slice = buildDailySlice([
       makeTask({ scheduledAt: '2026-11-23T09:00', status: 'confirmed' }),
       makeTask({ scheduledAt: '2026-11-23T14:00', status: 'skipped' }),
@@ -75,12 +96,14 @@ describe('Daily progress slice', () => {
     expect(slice.totalCount).toBe(1)
     expect(slice.confirmedCount).toBe(1)
     expect(slice.progress).toBe(100)
-    expect(slice.statusBadge).toBe('1 / 1 今日已确认')
+    expect(slice.metricSummary).toBe('1 / 1 已确认')
+    expect(slice.detail).toBe('今日已全部确认，可做日终回顾')
+    expect(slice.actionKind).toBe('review')
   })
 })
 
 describe('Weekly progress slice', () => {
-  it('displays a no-data state when no actions are scheduled in the current Monday–Sunday week', () => {
+  it('displays a no-data state and weekly scheduling guidance when no actions are scheduled Monday–Sunday', () => {
     const slice = buildWeeklySlice([
       makeTask({ scheduledAt: '2026-11-22T23:00' }), // Previous Sunday: outside window
       makeTask({ scheduledAt: '2026-11-30T09:00' }), // Next Monday: outside window
@@ -90,6 +113,8 @@ describe('Weekly progress slice', () => {
     expect(slice.progress).toBeNull()
     expect(slice.progressLabel).toBe('—')
     expect(slice.statusBadge).toBe('本周无排期')
+    expect(slice.detail).toBe('安排本周专注块并确认产出')
+    expect(slice.actionKind).toBe('schedule-week')
   })
 
   it('correctly bounds the Monday to Sunday window and counts confirmed evidence', () => {
@@ -107,21 +132,42 @@ describe('Weekly progress slice', () => {
     expect(slice.confirmedCount).toBe(2)
     expect(slice.progress).toBe(67)
     expect(slice.progressLabel).toBe('67%')
-    expect(slice.statusBadge).toBe('2 / 3 本周已确认')
+    expect(slice.metricSummary).toBe('2 / 3 已确认')
+    expect(slice.detail).toBe('本周还有 1 项排期待确认')
+  })
+
+  it('prompts weekly review when all scheduled tasks in the week are confirmed', () => {
+    const slice = buildWeeklySlice([
+      makeTask({ scheduledAt: '2026-11-23T09:00', status: 'confirmed' }),
+    ], now)
+
+    expect(slice.progress).toBe(100)
+    expect(slice.detail).toBe('本周排期已全确认，可做周复盘')
+    expect(slice.actionKind).toBe('review')
   })
 })
 
 describe('Monthly 30-day project progress slice', () => {
-  it('displays a no-data state when the project has no actions', () => {
+  it('displays a no-data state with clear next-step guidance when the project has no actions', () => {
     const slice = buildMonthlySlice(makeGoal(), [], now)
 
     expect(slice.hasData).toBe(false)
     expect(slice.progress).toBeNull()
     expect(slice.progressLabel).toBe('—')
     expect(slice.statusBadge).toBe('暂无项目行动')
+    expect(slice.detail).toBe('为项目添加第 1 项行动')
+    expect(slice.actionKind).toBe('project')
   })
 
-  it('shows honest completion based on evidence-confirmed actions and distinguishes pending items', () => {
+  it('guides setting project and first action when goal.project is empty', () => {
+    const slice = buildMonthlySlice(makeGoal({ project: '   ' }), [], now)
+
+    expect(slice.hasData).toBe(false)
+    expect(slice.detail).toBe('先设定 30 天项目与第 1 项行动')
+    expect(slice.actionKind).toBe('goal')
+  })
+
+  it('shows honest completion based on evidence-confirmed actions and guides pending verification', () => {
     const slice = buildMonthlySlice(makeGoal(), [
       makeTask({ id: '1', status: 'confirmed' }),
       makeTask({ id: '2', status: 'pending' }),
@@ -133,8 +179,8 @@ describe('Monthly 30-day project progress slice', () => {
     expect(slice.totalCount).toBe(3)
     expect(slice.confirmedCount).toBe(1)
     expect(slice.progress).toBe(33)
-    expect(slice.statusBadge).toBe('1 / 3 项产出已确认')
-    expect(slice.detail).toContain('已确认 1 项产出，另有 1 项等待核实证据')
+    expect(slice.metricSummary).toBe('1 / 3 已确认')
+    expect(slice.detail).toBe('核实 1 项证据并推进剩余项')
   })
 
   it('does not claim progress when all project tasks are still unconfirmed', () => {
@@ -145,8 +191,8 @@ describe('Monthly 30-day project progress slice', () => {
 
     expect(slice.hasData).toBe(true)
     expect(slice.progress).toBe(0)
-    expect(slice.statusBadge).toBe('0 / 2 项产出已确认')
-    expect(slice.detail).toContain('尚未获得确认产出证据')
+    expect(slice.metricSummary).toBe('0 / 2 已确认')
+    expect(slice.detail).toBe('推进并确认第 1 项项目产出')
   })
 })
 
@@ -160,11 +206,12 @@ describe('Yearly milestone and metric progress slice', () => {
     expect(slice.hasData).toBe(false)
     expect(slice.progress).toBeNull()
     expect(slice.progressLabel).toBe('—')
-    expect(slice.statusBadge).toBe('待设定量化指标')
-    expect(slice.detail).toContain('通过晋升实现收入提升（暂无量化数据，不预设比例）')
+    expect(slice.statusBadge).toBe('待设量化指标')
+    expect(slice.detail).toBe('设定 1 项可量化结果指标')
+    expect(slice.actionKind).toBe('metric')
   })
 
-  it('displays a no-data state when metric targets equal baselines (unmeasurable)', () => {
+  it('displays a no-data state and fix guidance when metric targets equal baselines (unmeasurable)', () => {
     const invalidMetric: OutcomeMetric = {
       id: 'm1',
       name: '储蓄',
@@ -181,6 +228,7 @@ describe('Yearly milestone and metric progress slice', () => {
     expect(slice.hasData).toBe(false)
     expect(slice.progress).toBeNull()
     expect(slice.progressLabel).toBe('—')
+    expect(slice.detail).toBe('修改指标目标值，使其可量化')
   })
 
   it('calculates honest metric progress when measurable outcome metrics are provided', () => {
@@ -201,7 +249,8 @@ describe('Yearly milestone and metric progress slice', () => {
     expect(slice.progress).toBe(29)
     expect(slice.progressLabel).toBe('29%')
     expect(slice.statusBadge).toBe('年薪 29%')
-    expect(slice.detail).toContain('年薪：当前 100000 / 目标 150000 AUD / year')
+    expect(slice.metricSummary).toBe('年薪 100000/150000')
+    expect(slice.detail).toBe('按真实结果更新「年薪」')
   })
 
   it('averages multiple valid outcome metrics accurately', () => {
@@ -233,6 +282,8 @@ describe('Yearly milestone and metric progress slice', () => {
     expect(slice.progress).toBe(65) // (50 + 80) / 2 = 65%
     expect(slice.progressLabel).toBe('65%')
     expect(slice.statusBadge).toBe('2 项指标平均 65%')
+    expect(slice.metricSummary).toBe('2 项量化指标')
+    expect(slice.detail).toBe('按真实结果定期更新 2 项指标')
   })
 })
 
